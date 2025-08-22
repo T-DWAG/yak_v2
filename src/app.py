@@ -506,6 +506,32 @@ def get_dual_key_info():
         logger.error(f"获取双钥匙信息失败: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/health')
+def health_check():
+    """Docker健康检查端点"""
+    try:
+        # 简单检查系统状态
+        status = {
+            'status': 'healthy',
+            'timestamp': datetime.now().isoformat(),
+            'license_system': 'ok'
+        }
+        
+        # 检查授权管理器是否工作
+        try:
+            license_manager.get_license_stats()
+            status['license_manager'] = 'ok'
+        except:
+            status['license_manager'] = 'degraded'
+        
+        return jsonify(status), 200
+    except Exception as e:
+        return jsonify({
+            'status': 'unhealthy',
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
 if __name__ == '__main__':
     init_system()
     app.run(debug=True, host='0.0.0.0', port=5000)
