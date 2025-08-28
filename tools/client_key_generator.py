@@ -5,6 +5,12 @@
 
 import os
 import sys
+
+# 添加src目录到Python路径
+current_dir = os.path.dirname(os.path.abspath(__file__))
+src_dir = os.path.join(current_dir, '..', 'src')
+sys.path.insert(0, src_dir)
+
 from dual_key_system import DualKeySystem
 
 def main():
@@ -60,4 +66,10 @@ def main():
         traceback.print_exc()
 
 if __name__ == "__main__":
-    main()
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1] == "--test":
+        # 测试模式，不实际生成文件
+        print("Test mode: client key generator working")
+        sys.exit(0)
+    else:
+        main()

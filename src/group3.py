@@ -9,6 +9,10 @@ from collections import defaultdict
 import logging
 import glob
 
+# 配置日志
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
 # 尝试导入YOLO，如果失败则创建虚拟类
 try:
     from ultralytics import YOLO
@@ -36,10 +40,6 @@ except ImportError:
             self.top1conf = 0.85
     
     YOLO = MockYOLO
-
-# 配置日志
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
 
 # 配置参数 - Docker友好的路径
 INPUT_DIR = os.environ.get('INPUT_DIR', './uploads')  # Docker环境使用相对路径
