@@ -1,0 +1,31 @@
+# Simplified Dockerfile for quick testing
+FROM python:3.10-slim
+
+WORKDIR /app
+
+# Install only essential system packages
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
+# Copy and install minimal requirements
+COPY requirements.txt .
+RUN pip install flask pillow imagehash --no-cache-dir
+
+# Copy application code
+COPY src/ ./src/
+COPY run.py .
+
+# Create directories
+RUN mkdir -p uploads results data license_data dual_keys
+
+# Environment variables
+ENV PYTHONPATH=/app/src
+ENV FLASK_ENV=production
+
+# Expose port
+EXPOSE 5000
+
+# Simple health check
+HEALTHCHECK --interval=30s --timeout=10s CMD curl -f http://localhost:5000/health || exit 1
+
+# Start command
+CMD ["python", "run.py"]

@@ -1,0 +1,16 @@
+services:
+  yak-analyzer:
+    build:
+      context: .
+      dockerfile: Dockerfile.simple
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./data:/app/data
+      - ./uploads:/app/uploads
+      - ./results:/app/results
+      - ./tools:/app/tools
+    environment:
+      - FLASK_ENV=production
+      - PYTHONPATH=/app/src
+    restart: unless-stopped
