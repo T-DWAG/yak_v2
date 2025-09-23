@@ -1,0 +1,1013 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>牦牛图片跨案件号相似度分析系统</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        
+        .main-card {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        
+        .upload-area {
+            border: 3px dashed #667eea;
+            border-radius: 15px;
+            padding: 60px 20px;
+            text-align: center;
+            transition: all 0.3s;
+            cursor: pointer;
+            background: #f8f9ff;
+        }
+        
+        .upload-area:hover {
+            border-color: #764ba2;
+            background: #f0f2ff;
+        }
+        
+        .upload-area.dragover {
+            background: #e8ebff;
+            border-color: #4c51bf;
+        }
+        
+        .upload-icon {
+            font-size: 60px;
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+        
+        .upload-text {
+            font-size: 1.2em;
+            color: #4a5568;
+            margin-bottom: 10px;
+        }
+        
+        .upload-hint {
+            color: #718096;
+            font-size: 0.9em;
+        }
+        
+        #fileInput {
+            display: none;
+        }
+        
+        .file-list-header {
+            margin-top: 20px;
+            padding: 0;
+        }
+        
+        .file-count {
+            padding: 12px 20px;
+            background: #e2e8f0;
+            border-radius: 10px 10px 0 0;
+            font-weight: bold;
+            color: #4a5568;
+            text-align: center;
+            border: 2px solid #e2e8f0;
+            border-bottom: none;
+        }
+        
+        .scroll-hint {
+            padding: 8px 20px;
+            background: #bee3f8;
+            border-radius: 0;
+            font-size: 0.9em;
+            color: #2b6cb0;
+            text-align: center;
+            border: 2px solid #90cdf4;
+            border-top: none;
+            border-bottom: none;
+        }
+        
+        .file-list {
+            margin-top: 0;
+            padding: 20px;
+            background: #f7fafc;
+            border-radius: 0 0 10px 10px;
+            display: none;
+            max-height: 300px;
+            overflow-y: auto;
+            border: 2px solid #e2e8f0;
+            border-top: none;
+        }
+        
+        /* 自定义滚动条样式 */
+        .file-list::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .file-list::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 4px;
+        }
+        
+        .file-list::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        
+        .file-list::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        
+        .file-item {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            background: white;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: all 0.2s ease;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .file-item:hover {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+            border-color: #667eea;
+        }
+        
+        .file-item:last-child {
+            margin-bottom: 0;
+        }
+        
+        .file-icon {
+            width: 40px;
+            height: 40px;
+            background: #667eea;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            margin-right: 15px;
+        }
+        
+        .file-name {
+            flex: 1;
+            color: #2d3748;
+        }
+        
+        .file-size {
+            color: #718096;
+            font-size: 0.9em;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 15px;
+            margin-top: 30px;
+            justify-content: center;
+        }
+        
+        .btn {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-primary:disabled {
+            background: #cbd5e0;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .btn-secondary {
+            background: #e2e8f0;
+            color: #4a5568;
+        }
+        
+        .btn-secondary:hover {
+            background: #cbd5e0;
+        }
+        
+        .progress-section {
+            display: none;
+            margin-top: 30px;
+            padding: 30px;
+            background: #f7fafc;
+            border-radius: 15px;
+        }
+        
+        .progress-title {
+            font-size: 1.2em;
+            color: #2d3748;
+            margin-bottom: 15px;
+        }
+        
+        .progress-bar-container {
+            background: #e2e8f0;
+            height: 30px;
+            border-radius: 15px;
+            overflow: hidden;
+            margin-bottom: 15px;
+        }
+        
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            width: 0%;
+            transition: width 0.5s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+        
+        .status-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .status-card {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .status-label {
+            color: #718096;
+            font-size: 0.9em;
+            margin-bottom: 5px;
+        }
+        
+        .status-value {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .results-section {
+            display: none;
+            margin-top: 30px;
+        }
+        
+        .results-title {
+            font-size: 1.5em;
+            color: #2d3748;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .groups-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        
+        .group-card {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 15px;
+            padding: 20px;
+            transition: all 0.3s;
+        }
+        
+        .group-card:hover {
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            transform: translateY(-5px);
+        }
+        
+        .group-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 15px;
+        }
+        
+        .group-name {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #2d3748;
+        }
+        
+        .group-count {
+            background: #667eea;
+            color: white;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.9em;
+        }
+        
+        .group-preview {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 5px;
+            margin-top: 10px;
+        }
+        
+        .preview-image {
+            width: 100%;
+            height: 80px;
+            background: #f7fafc;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #cbd5e0;
+            font-size: 0.8em;
+        }
+        
+        .error-message {
+            background: #fed7d7;
+            color: #c53030;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            display: none;
+        }
+        
+        .success-message {
+            background: #c6f6d5;
+            color: #22543d;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            display: none;
+        }
+        
+        .license-info {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        
+        .license-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 15px;
+        }
+        
+        .license-title {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #2d3748;
+        }
+        
+        .license-status {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+        
+        .license-status.authorized {
+            background: #c6f6d5;
+            color: #22543d;
+        }
+        
+        .license-status.unauthorized {
+            background: #fed7d7;
+            color: #c53030;
+        }
+        
+        .license-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .license-stat {
+            background: #f7fafc;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        
+        .license-stat-label {
+            color: #718096;
+            font-size: 0.85em;
+            margin-bottom: 5px;
+        }
+        
+        .license-stat-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .license-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .btn-small {
+            padding: 8px 16px;
+            font-size: 0.9em;
+        }
+        
+        #licenseFileInput {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🐂 牦牛图片跨案件号相似度分析系统</h1>
+            <p>基于 YOLO 分类和感知哈希的跨案件号智能图片检测工具</p>
+        </div>
+        
+        <div class="license-info" id="licenseInfo">
+            <div class="license-header">
+                <div class="license-title">📄 授权信息</div>
+                <div class="license-status" id="licenseStatus">检查中...</div>
+            </div>
+            <div class="license-stats">
+                <div class="license-stat">
+                    <div class="license-stat-label">已使用图片</div>
+                    <div class="license-stat-value" id="imagesUsed">-</div>
+                </div>
+                <div class="license-stat">
+                    <div class="license-stat-label">剩余图片</div>
+                    <div class="license-stat-value" id="imagesRemaining">-</div>
+                </div>
+                <div class="license-stat">
+                    <div class="license-stat-label">总计图片</div>
+                    <div class="license-stat-value" id="totalAllowed">-</div>
+                </div>
+                <div class="license-stat">
+                    <div class="license-stat-label">授权有效期</div>
+                    <div class="license-stat-value" id="validUntil" style="font-size: 1em;">-</div>
+                </div>
+            </div>
+            <div class="license-actions">
+                <button class="btn btn-secondary btn-small" onclick="refreshLicenseInfo()">
+                    🔄 刷新授权信息
+                </button>
+                <button class="btn btn-secondary btn-small" onclick="document.getElementById('licenseFileInput').click()">
+                    📤 上传授权文件
+                </button>
+                <button class="btn btn-secondary btn-small" onclick="exportUsageReport()">
+                    📊 导出使用量报告
+                </button>
+                <button class="btn btn-secondary btn-small" id="generateClientKeyBtn" onclick="generateClientKey()" disabled>
+                    🔑 生成客户端钥匙
+                </button>
+            </div>
+            <input type="file" id="licenseFileInput" accept=".json,.txt" onchange="uploadLicenseFile()">
+            
+            <!-- 双钥匙系统说明 -->
+            <div style="margin-top: 15px; padding: 15px; background: #f0f2ff; border-radius: 10px; border-left: 4px solid #667eea;">
+                <div style="font-weight: bold; color: #667eea; margin-bottom: 8px;">🔐 双钥匙授权系统</div>
+                <div style="font-size: 0.9em; color: #4a5568; line-height: 1.5;">
+                    <div>1️⃣ <strong>生成客户端钥匙</strong>：包含您的使用量数据，发送给授权方</div>
+                    <div>2️⃣ <strong>等待授权钥匙</strong>：授权方验证后生成新的授权文件</div>
+                    <div>3️⃣ <strong>上传授权钥匙</strong>：获得新的使用权限和配额</div>
+                    <div style="margin-top: 8px; color: #718096;">
+                        <span id="dualKeyStatus">检查中...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="main-card">
+            <div class="upload-area" id="uploadArea">
+                <div class="upload-icon">📁</div>
+                <div class="upload-text">点击或拖拽上传 ZIP 文件</div>
+                <div class="upload-hint">支持多个 ZIP 文件同时上传，最大 500MB</div>
+                <input type="file" id="fileInput" multiple accept=".zip">
+            </div>
+            
+            <div class="file-list-header" id="fileListHeader" style="display: none;">
+                <div class="file-count" id="fileCount">已选择 0 个文件</div>
+                <div class="scroll-hint" id="scrollHint" style="display: none;">📜 文件较多，可滚动查看</div>
+            </div>
+            <div class="file-list" id="fileList"></div>
+            
+            <div class="button-group">
+                <button class="btn btn-secondary" onclick="clearFiles()">清除文件</button>
+                <button class="btn btn-primary" id="startBtn" onclick="startProcessing()" disabled>
+                    开始分析
+                </button>
+            </div>
+            
+            <div class="progress-section" id="progressSection">
+                <div class="progress-title" id="progressTitle">准备处理...</div>
+                <div class="progress-bar-container">
+                    <div class="progress-bar" id="progressBar">0%</div>
+                </div>
+                <div class="status-info">
+                    <div class="status-card">
+                        <div class="status-label">总图片数</div>
+                        <div class="status-value" id="totalImages">0</div>
+                    </div>
+                    <div class="status-card">
+                        <div class="status-label">Class2 图片</div>
+                        <div class="status-value" id="class2Images">0</div>
+                    </div>
+                    <div class="status-card">
+                        <div class="status-label">跨案件号重复组数</div>
+                        <div class="status-value" id="groupsFound">0</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="error-message" id="errorMessage"></div>
+            <div class="success-message" id="successMessage"></div>
+            
+            <div class="results-section" id="resultsSection">
+                <div class="results-title">
+                    <span>分组结果</span>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn btn-primary" onclick="downloadCSV()">
+                            下载CSV记录
+                        </button>
+                        <button class="btn btn-primary" onclick="downloadResults()">
+                            下载所有结果
+                        </button>
+                    </div>
+                </div>
+                <div class="groups-container" id="groupsContainer"></div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let selectedFiles = [];
+        let statusInterval = null;
+        
+        // 文件上传区域事件
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        
+        uploadArea.addEventListener('click', () => fileInput.click());
+        
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+        
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            handleFiles(e.dataTransfer.files);
+        });
+        
+        fileInput.addEventListener('change', (e) => {
+            handleFiles(e.target.files);
+        });
+        
+        function handleFiles(files) {
+            // 累加文件而不是替换
+            const newFiles = Array.from(files).filter(f => f.name.endsWith('.zip'));
+            
+            if (newFiles.length === 0) {
+                alert('请选择 ZIP 文件');
+                return;
+            }
+            
+            // 检查重复文件
+            const existingNames = selectedFiles.map(f => f.name);
+            newFiles.forEach(file => {
+                if (!existingNames.includes(file.name)) {
+                    selectedFiles.push(file);
+                }
+            });
+            
+            displayFiles();
+            document.getElementById('startBtn').disabled = false;
+        }
+        
+        function displayFiles() {
+            const fileList = document.getElementById('fileList');
+            const fileListHeader = document.getElementById('fileListHeader');
+            const fileCount = document.getElementById('fileCount');
+            const scrollHint = document.getElementById('scrollHint');
+            
+            fileList.innerHTML = '';
+            
+            if (selectedFiles.length === 0) {
+                fileList.style.display = 'none';
+                fileListHeader.style.display = 'none';
+                document.getElementById('startBtn').disabled = true;
+                return;
+            }
+            
+            // 显示头部和文件列表
+            fileListHeader.style.display = 'block';
+            fileList.style.display = 'block';
+            
+            // 更新文件计数
+            fileCount.textContent = `已选择 ${selectedFiles.length} 个文件`;
+            
+            // 显示或隐藏滚动提示
+            if (selectedFiles.length > 5) {
+                scrollHint.style.display = 'block';
+            } else {
+                scrollHint.style.display = 'none';
+            }
+            
+            selectedFiles.forEach((file, index) => {
+                const fileItem = document.createElement('div');
+                fileItem.className = 'file-item';
+                fileItem.innerHTML = `
+                    <div class="file-icon">📦</div>
+                    <div class="file-name">${file.name}</div>
+                    <div class="file-size">${formatFileSize(file.size)}</div>
+                    <button onclick="removeFile(${index})" style="
+                        background: #e53e3e;
+                        color: white;
+                        border: none;
+                        padding: 5px 10px;
+                        border-radius: 5px;
+                        cursor: pointer;
+                        margin-left: 10px;
+                    ">删除</button>
+                `;
+                fileList.appendChild(fileItem);
+            });
+        }
+        
+        function removeFile(index) {
+            selectedFiles.splice(index, 1);
+            displayFiles();
+        }
+        
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        }
+        
+        function clearFiles() {
+            if (selectedFiles.length > 0 && !confirm('确定要清除所有已选择的文件吗？')) {
+                return;
+            }
+            selectedFiles = [];
+            fileInput.value = '';
+            document.getElementById('fileList').style.display = 'none';
+            document.getElementById('startBtn').disabled = true;
+            document.getElementById('resultsSection').style.display = 'none';
+        }
+        
+        async function startProcessing() {
+            if (selectedFiles.length === 0) return;
+            
+            const formData = new FormData();
+            selectedFiles.forEach(file => {
+                formData.append('files', file);
+            });
+            
+            document.getElementById('startBtn').disabled = true;
+            document.getElementById('progressSection').style.display = 'block';
+            document.getElementById('resultsSection').style.display = 'none';
+            document.getElementById('errorMessage').style.display = 'none';
+            document.getElementById('successMessage').style.display = 'none';
+            
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    startStatusPolling();
+                } else {
+                    showError(result.error || '上传失败');
+                }
+            } catch (error) {
+                showError('网络错误：' + error.message);
+            }
+        }
+        
+        function startStatusPolling() {
+            statusInterval = setInterval(async () => {
+                try {
+                    const response = await fetch('/status');
+                    const status = await response.json();
+                    
+                    updateProgress(status);
+                    
+                    if (!status.is_processing) {
+                        clearInterval(statusInterval);
+                        
+                        if (status.error) {
+                            showError(status.error);
+                        } else {
+                            showSuccess('处理完成！');
+                            loadResults();
+                        }
+                    }
+                } catch (error) {
+                    clearInterval(statusInterval);
+                    showError('状态更新失败');
+                }
+            }, 1000);
+        }
+        
+        function updateProgress(status) {
+            document.getElementById('progressTitle').textContent = status.current_step || '处理中...';
+            document.getElementById('progressBar').style.width = status.progress + '%';
+            document.getElementById('progressBar').textContent = status.progress + '%';
+            document.getElementById('totalImages').textContent = status.total_images;
+            document.getElementById('class2Images').textContent = status.class2_images;
+            document.getElementById('groupsFound').textContent = status.groups_found;
+        }
+        
+        async function loadResults() {
+            try {
+                const response = await fetch('/results');
+                const data = await response.json();
+                
+                if (data.groups && data.groups.length > 0) {
+                    displayResults(data.groups);
+                } else {
+                    showError('没有找到相似图片组');
+                }
+            } catch (error) {
+                showError('加载结果失败');
+            }
+        }
+        
+        function displayResults(groups) {
+            const container = document.getElementById('groupsContainer');
+            container.innerHTML = '';
+            
+            // groups.forEach(group => {
+            groups.slice(0, 10).forEach(group => {  // 只显示前10组
+
+                const card = document.createElement('div');
+                card.className = 'group-card';
+                
+                // 生成图片预览
+                const imagePreview = group.images.slice(0, 3).map(imgPath => 
+                    `<img src="/image/${imgPath}" style="
+                        width: 100%;
+                        height: 80px;
+                        object-fit: cover;
+                        border-radius: 5px;
+                    " alt="preview" onerror="this.style.display='none'">`
+                ).join('');
+                
+                card.innerHTML = `
+                    <div class="group-header">
+                        <div class="group-name">${group.name}</div>
+                        <div class="group-count">${group.count} 张</div>
+                    </div>
+                    <div class="group-preview">
+                        ${imagePreview}
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+            
+            document.getElementById('resultsSection').style.display = 'block';
+        }
+        
+        async function downloadResults() {
+            window.location.href = '/download_results';
+        }
+        
+        async function downloadCSV() {
+            window.location.href = '/download_csv';
+        }
+        
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = '❌ ' + message;
+            errorDiv.style.display = 'block';
+            document.getElementById('progressSection').style.display = 'none';
+            document.getElementById('startBtn').disabled = false;
+        }
+        
+        function showSuccess(message) {
+            const successDiv = document.getElementById('successMessage');
+            successDiv.textContent = '✅ ' + message;
+            successDiv.style.display = 'block';
+            document.getElementById('startBtn').disabled = false;
+        }
+        
+        // 授权和使用量相关函数
+        async function loadLicenseInfo() {
+            try {
+                const response = await fetch('/license_stats');
+                const stats = await response.json();
+                
+                if (response.ok) {
+                    updateLicenseDisplay(stats);
+                } else {
+                    console.error('获取授权信息失败:', stats.error);
+                    updateLicenseDisplay({
+                        authorization_status: 'unauthorized',
+                        authorization_message: stats.error || '获取授权信息失败'
+                    });
+                }
+            } catch (error) {
+                console.error('网络错误:', error);
+                updateLicenseDisplay({
+                    authorization_status: 'unauthorized',
+                    authorization_message: '网络连接错误'
+                });
+            }
+        }
+        
+        function updateLicenseDisplay(stats) {
+            const statusElement = document.getElementById('licenseStatus');
+            const isAuthorized = stats.authorization_status === 'authorized';
+            
+            // 更新状态显示
+            statusElement.textContent = isAuthorized ? '✅ 已授权' : '❌ 未授权';
+            statusElement.className = 'license-status ' + (isAuthorized ? 'authorized' : 'unauthorized');
+            
+            // 更新统计数据
+            document.getElementById('imagesUsed').textContent = stats.images_used || 0;
+            document.getElementById('imagesRemaining').textContent = stats.images_remaining || 0;
+            document.getElementById('totalAllowed').textContent = stats.total_images_allowed || 0;
+            
+            // 格式化有效期显示
+            if (stats.valid_until) {
+                try {
+                    const date = new Date(stats.valid_until);
+                    document.getElementById('validUntil').textContent = date.toLocaleDateString('zh-CN');
+                } catch {
+                    document.getElementById('validUntil').textContent = stats.valid_until;
+                }
+            } else {
+                document.getElementById('validUntil').textContent = '-';
+            }
+            
+            // 显示授权消息（如果有错误）
+            if (!isAuthorized && stats.authorization_message) {
+                showError(stats.authorization_message);
+            }
+        }
+        
+        async function refreshLicenseInfo() {
+            await loadLicenseInfo();
+        }
+        
+        async function uploadLicenseFile() {
+            const fileInput = document.getElementById('licenseFileInput');
+            const file = fileInput.files[0];
+            
+            if (!file) return;
+            
+            const formData = new FormData();
+            formData.append('license_file', file);
+            
+            try {
+                const response = await fetch('/load_license', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showSuccess('授权文件上传成功！');
+                    await loadLicenseInfo(); // 刷新授权信息
+                } else {
+                    showError('授权文件上传失败: ' + (result.error || '未知错误'));
+                }
+            } catch (error) {
+                showError('网络错误: ' + error.message);
+            }
+            
+            fileInput.value = ''; // 清空文件选择
+        }
+        
+        async function exportUsageReport() {
+            try {
+                window.location.href = '/export_usage_report';
+            } catch (error) {
+                showError('导出使用量报告失败: ' + error.message);
+            }
+        }
+        
+        // 双钥匙系统相关函数
+        async function loadDualKeyInfo() {
+            try {
+                const response = await fetch('/dual_key_info');
+                const info = await response.json();
+                
+                if (response.ok) {
+                    updateDualKeyDisplay(info);
+                } else {
+                    console.error('获取双钥匙信息失败:', info.error);
+                }
+            } catch (error) {
+                console.error('双钥匙信息网络错误:', error);
+            }
+        }
+        
+        function updateDualKeyDisplay(info) {
+            const statusElement = document.getElementById('dualKeyStatus');
+            const generateBtn = document.getElementById('generateClientKeyBtn');
+            
+            if (info.can_generate_key) {
+                statusElement.textContent = `✅ 可生成钥匙 (已处理 ${info.total_images_processed} 张图片)`;
+                generateBtn.disabled = false;
+            } else {
+                statusElement.textContent = `⚠️ 需要先运行图片处理任务才能生成钥匙`;
+                generateBtn.disabled = true;
+            }
+        }
+        
+        async function generateClientKey() {
+            try {
+                const response = await fetch('/generate_client_key');
+                
+                if (response.ok) {
+                    // 触发文件下载
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.style.display = 'none';
+                    a.href = url;
+                    a.download = `client_usage_key_${new Date().toISOString().slice(0,10)}.json`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                    
+                    showSuccess('客户端钥匙生成成功！请将下载的文件发送给授权方。');
+                } else {
+                    const error = await response.json();
+                    showError('生成客户端钥匙失败: ' + (error.error || '未知错误'));
+                }
+            } catch (error) {
+                showError('网络错误: ' + error.message);
+            }
+        }
+        
+        // 页面加载时获取授权信息和双钥匙信息
+        document.addEventListener('DOMContentLoaded', function() {
+            loadLicenseInfo();
+            loadDualKeyInfo();
+        });
+    </script>
+</body>
+</html>
