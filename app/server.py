@@ -4,6 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from typing import List
 import shutil, os, io, json, threading, zipfile, pathlib, time
 from . import pipeline
+from .utils.license_manager import license_manager
 
 app = FastAPI()
 
@@ -22,6 +23,10 @@ async def root_v2():
     index_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static", "index2.html")
     return FileResponse(index_path)
 
+@app.get("/v3")
+async def root_v2():
+    index_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static", "index3.html")
+    return FileResponse(index_path)
 
 # ===== 内部状态与工具函数 =====
 _LOCK = threading.Lock()
@@ -83,6 +88,20 @@ def _count_db_stats():
     return stats
 
 
+def _check_license_at_startup():
+    """启动时检查授权"""
+    is_valid, message, license_data = license_manager.validate_current_license()
+    if not is_valid:
+        print(f"⚠️  授权检查失败: {message}")
+        print("⚠️  系统将以未授权模式运行，部分功能受限")
+        return False
+    else:
+        print(f"✅ 授权检查通过: {license_data.get('license_id', 'Unknown')}")
+        print(f"   许可图片数量: {license_data.get('total_images_allowed', 0)}")
+        print(f"   有效期至: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(license_data.get('expires_at', 0)))}")
+        return True
+
+
 def _count_groups():
     gdir = pathlib.Path("dup_groups")
     if not gdir.exists():
@@ -117,8 +136,21 @@ def _build_status_response():
 
 def _process_in_background(zip_paths: list[str]):
     global _LAST_ERROR
+    session_id = None
+
     try:
         _LAST_ERROR = None
+
+        # 检查授权
+        is_valid, message, _ = license_manager.validate_current_license()
+        if not is_valid:
+            raise Exception(f"授权无效: {message}")
+
+        # 开始处理会话
+        session_id = license_manager.start_processing_session()
+        if not session_id:
+            raise Exception("无法创建处理会话")
+
         pipeline.PROGRESS["status"] = "running"
         pipeline._progress_set("extract", 0, len(zip_paths), "Extract all zips")
         pipeline.extract_zip_to_db(zip_paths)
@@ -129,19 +161,30 @@ def _process_in_background(zip_paths: list[str]):
         pipeline._progress_set("dedup", 0, 1, "group")
         pipeline.find_cross_case_dups()
 
-        usage = _load_usage()
+        # 获取处理的图片数量
         db_stats = _count_db_stats()
-        usage["total_images_processed"] = db_stats.get("total_images", 0)
-        usage["runs"] = int(usage.get("runs", 0)) + 1
-        usage["last_run"] = time.strftime("%Y-%m-%d %H:%M:%S")
-        _save_usage(usage)
+        processed_images = db_stats.get("total_images", 0)
+
+        # 结束处理会话，更新使用统计
+        if session_id:
+            license_manager.end_processing_session(session_id, processed_images)
 
         pipeline.PROGRESS["status"] = "done"
         pipeline._progress_set("none", 0, 0, "")
+
     except Exception as e:
         _LAST_ERROR = str(e)
         pipeline.PROGRESS["status"] = "error"
         pipeline.PROGRESS["detail"] = _LAST_ERROR
+
+        # 如果出错且会话已创建，也要结束会话
+        if session_id:
+            try:
+                db_stats = _count_db_stats()
+                processed_images = db_stats.get("total_images", 0)
+                license_manager.end_processing_session(session_id, processed_images)
+            except:
+                pass
 
 
 # ===== API: 文件上传与处理 =====
@@ -149,10 +192,19 @@ def _process_in_background(zip_paths: list[str]):
 async def upload(files: List[UploadFile] = File(...)):
     _ensure_dirs()
     print("[API] /upload called")
+
+    # 检查授权状态
+    is_valid, message, _ = license_manager.validate_current_license()
+    if not is_valid:
+        return JSONResponse(status_code=403, content={"error": f"授权无效: {message}"})
+
     with _LOCK:
         global _PROCESSING_THREAD
         if _PROCESSING_THREAD and _PROCESSING_THREAD.is_alive():
             return JSONResponse(status_code=429, content={"error": "已有任务在运行，请稍后再试"})
+
+        # 注意：这里不再进行预估，实际的图片数量检查在pipeline.py中进行
+        # 这样可以避免预估不准导致的误判问题
 
         saved = []
         for uf in files:
@@ -237,19 +289,7 @@ async def download_csv():
 # ===== API: 授权/使用量（简化实现） =====
 @app.get("/license_stats")
 async def license_stats():
-    lic = _load_license()
-    usage = _load_usage()
-    authorized = lic is not None
-    total_allowed = lic.get("total_images_allowed", 100000) if authorized and isinstance(lic, dict) else 100000
-    stats = {
-        "authorization_status": "authorized" if authorized else "unauthorized",
-        "authorization_message": None if authorized else "未加载授权文件",
-        "images_used": usage.get("total_images_processed", 0),
-        "total_images_allowed": total_allowed,
-        "images_remaining": max(0, total_allowed - int(usage.get("total_images_processed", 0))),
-        "valid_until": (lic.get("valid_until") if authorized and isinstance(lic, dict) else None),
-    }
-    return stats
+    return license_manager.get_license_status()
 
 
 @app.post("/load_license")
@@ -257,14 +297,21 @@ async def load_license(license_file: UploadFile = File(...)):
     _ensure_dirs()
     try:
         content = await license_file.read()
-        try:
-            obj = json.loads(content.decode("utf-8"))
-            with open(_LICENSE_FILE, "w", encoding="utf-8") as f:
-                json.dump(obj, f, ensure_ascii=False, indent=2)
-        except Exception:
-            with open(_LICENSE_FILE, "wb") as f:
-                f.write(content)
-        return {"ok": True}
+        license_data = json.loads(content.decode("utf-8"))
+
+        # 保存授权文件
+        success = license_manager.save_license(license_data)
+        if not success:
+            return JSONResponse(status_code=500, content={"error": "保存授权文件失败"})
+
+        # 验证授权文件
+        is_valid, message, _ = license_manager.validate_current_license()
+        if not is_valid:
+            return JSONResponse(status_code=400, content={"error": f"授权文件无效: {message}"})
+
+        return {"ok": True, "message": "授权文件加载成功"}
+    except json.JSONDecodeError:
+        return JSONResponse(status_code=400, content={"error": "授权文件格式错误"})
     except Exception as e:
         return JSONResponse(status_code=400, content={"error": str(e)})
 
@@ -272,40 +319,53 @@ async def load_license(license_file: UploadFile = File(...)):
 @app.get("/export_usage_report")
 async def export_usage_report():
     _ensure_dirs()
-    usage = _load_usage()
+    usage_stats = license_manager.get_usage_stats()
+
+    # 添加授权状态信息
+    license_status = license_manager.get_license_status()
+    usage_stats["license_status"] = license_status
+
     out = pathlib.Path("results") / "usage_report.json"
     with open(out, "w", encoding="utf-8") as f:
-        json.dump(usage, f, ensure_ascii=False, indent=2)
+        json.dump(usage_stats, f, ensure_ascii=False, indent=2)
     return FileResponse(str(out), media_type="application/json", filename=out.name)
 
 
 @app.get("/dual_key_info")
 async def dual_key_info():
-    usage = _load_usage()
-    total = int(usage.get("total_images_processed", 0))
+    can_generate = license_manager.can_generate_client_key()
+    usage_stats = license_manager.get_usage_stats()
+
     return {
-        "can_generate_key": total > 0,
-        "total_images_processed": total,
+        "can_generate_key": can_generate,
+        "total_images_processed": usage_stats.get("total_images_processed", 0),
     }
 
 
 @app.get("/generate_client_key")
 async def generate_client_key():
-    usage = _load_usage()
-    lic = _load_license() or {}
-    payload = {
-        "type": "client_usage_key",
-        "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-        "usage": usage,
-        "license_id": lic.get("license_id") if isinstance(lic, dict) else None,
-    }
-    buf = io.BytesIO()
-    data = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
-    buf.write(data)
-    buf.seek(0)
-    return StreamingResponse(buf, media_type="application/json", headers={
-        "Content-Disposition": "attachment; filename=client_usage_key.json"
-    })
+    try:
+        from .utils.client_key import generate_client_key
+
+        # 检查是否可以生成客户端钥匙
+        if not license_manager.can_generate_client_key():
+            return JSONResponse(status_code=403, content={"error": "暂无处理记录，无法生成客户端钥匙"})
+
+        # 生成客户端钥匙
+        client_key = generate_client_key()
+
+        # 返回文件下载
+        buf = io.BytesIO()
+        data = json.dumps(client_key, ensure_ascii=False, indent=2).encode("utf-8")
+        buf.write(data)
+        buf.seek(0)
+
+        return StreamingResponse(buf, media_type="application/json", headers={
+            "Content-Disposition": "attachment; filename=client_usage_key.json"
+        })
+
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": f"生成客户端钥匙失败: {str(e)}"})
 
 
 # 兼容旧接口：单文件上传 /upload-zip/
@@ -329,5 +389,8 @@ async def upload_zip_compat(file: UploadFile = File(...)):
         return {"ok": True, "files": [fname]}
 
 if __name__ == "__main__":
+    # 启动时检查授权
+    _check_license_at_startup()
+
     import uvicorn
     uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=True)

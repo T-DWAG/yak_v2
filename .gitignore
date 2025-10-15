@@ -53,3 +53,11 @@ zip_test/
 # Temporary files
 *.tmp
 *.temp
+
+# Claude
+.claude/
+
+# License files (keep templates, ignore actual licenses)
+license.json
+
+
